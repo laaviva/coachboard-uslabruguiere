@@ -1,0 +1,23 @@
+{
+  "name": "US Labruguière CoachBoard U10/U11",
+  "short_name": "CoachBoard",
+  "description": "Tableau tactique personnel pour préparer les matchs et séances U10/U11.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "orientation": "landscape",
+  "lang": "fr-FR",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

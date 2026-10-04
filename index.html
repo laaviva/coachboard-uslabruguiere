@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>US Labruguière — CoachBoard U10/U11</title>
+<style>
+:root{--bg:#0d1117;--panel:#151b23;--panel2:#1c2430;--line:#2b3645;--blue:#1787ff;--red:#ed4b4b;--green:#2d8b49;--yellow:#ffd447;--text:#f5f7fa;--muted:#9ca8b7}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;overflow-x:hidden}
+button,select,input,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
+button{cursor:pointer;touch-action:manipulation}button:active{transform:scale(.98)}button.primary{background:var(--blue);border-color:var(--blue)}
+button.danger{background:#63252a}.active{outline:2px solid var(--yellow);background:#26344a}
+header{position:sticky;top:0;z-index:20;background:rgba(13,17,23,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:800;font-size:17px;margin-right:auto}.brand span{color:#61adff}
+.tabs{display:flex;gap:6px;overflow:auto;padding:8px 12px;border-bottom:1px solid var(--line);background:#111720}
+.tabs button{white-space:nowrap}
+main{display:grid;grid-template-columns:290px minmax(520px,1fr) 300px;gap:10px;padding:10px;max-width:1800px;margin:auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px}
+.panel h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:5px 0 9px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.stack{display:grid;gap:7px}.small{font-size:12px;color:var(--muted);line-height:1.4}
+.pitchWrap{display:flex;justify-content:center;align-items:flex-start}
+canvas{width:100%;height:auto;aspect-ratio:1.55/1;background:#2e8545;border-radius:14px;touch-action:none;box-shadow:0 10px 35px #0008}
+.status{padding:8px 10px;background:#10161e;border:1px solid var(--line);border-radius:10px;margin-top:8px;min-height:38px}
+.row{display:flex;gap:7px;align-items:center}.row>*{flex:1}
+hr{border:0;border-top:1px solid var(--line);margin:12px 0}
+.list{max-height:270px;overflow:auto;display:grid;gap:6px}.item{background:#10161e;border:1px solid var(--line);border-radius:9px;padding:8px;display:flex;gap:6px;align-items:center}.item b{flex:1}
+.chip{display:inline-block;padding:4px 7px;border-radius:20px;background:#253044;font-size:11px}
+.sequence{min-height:80px;background:#10161e;border-radius:10px;padding:9px;line-height:1.7}
+.timeline{display:flex;gap:5px;overflow:auto;padding:6px 0}.step{min-width:64px;text-align:center;background:#202b39;border-radius:9px;padding:7px}.step.current{background:#ffe05a;color:#111}
+.hidden{display:none!important}
+@media(max-width:1100px){main{grid-template-columns:240px minmax(450px,1fr)}main>.right{grid-column:1/-1}.right .list{max-height:180px}}
+@media(max-width:760px){header{position:relative}.tabs{position:sticky;top:0;z-index:15}main{display:flex;flex-direction:column;padding:7px}.left,.right{order:2}.center{order:1}.panel{padding:9px}canvas{border-radius:10px}.brand{width:100%}.grid3{grid-template-columns:repeat(2,1fr)}}
+@media print{header,.tabs,.left,.right{display:none!important}main{display:block;padding:0}.panel{border:0}.pitchWrap canvas{width:100%;box-shadow:none}}
+</style>
+
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-title" content="CoachBoard">
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+}
+</script>
+</head>
+<body>
+<header>
+<div class="brand">⚽ <span>US LABRUGUIÈRE</span> · CoachBoard U10/U11</div>
+<button id="newBtn">Nouveau</button><button id="saveBtn">💾 Sauver</button><button id="loadBtn">📂 Charger</button>
+<button id="exportBtn" class="primary">PNG</button><button id="printBtn">A4 / PDF</button>
+</header>
+<nav class="tabs">
+<button class="active" data-tab="board">🎯 Tableau</button><button data-tab="actions">🧠 Actions</button><button data-tab="session">📋 Séance</button><button data-tab="match">🏆 Match</button><button data-tab="config">⚙️ Configurer</button>
+</nav>
+
+<main>
+<aside class="left panel">
+<h3>Équipes</h3>
+<div class="grid2">
+<select id="ourFormation"><option value="labru_1331">US — 1-3-3-1</option></select>
+<select id="oppFormation"><option value="none">Adversaire : aucun</option><option value="opp_1331">1-3-3-1</option><option value="opp_1232">1-2-3-2</option><option value="opp_1322">1-3-2-2</option></select>
+</div>
+<div class="row" style="margin-top:7px"><button id="ourBtn" class="active">🔵 Nous</button><button id="oppBtn">🔴 Adversaire</button></div>
+<h3>Phases</h3>
+<div class="grid2">
+<button class="phase active" data-phase="Construction">Construction</button><button class="phase" data-phase="Transition">Transition</button>
+<button class="phase" data-phase="Attaque">Attaque</button><button class="phase" data-phase="Défense">Défense</button>
+</div>
+<h3>Outils</h3>
+<div class="grid3">
+<button class="tool active" data-tool="select">↖</button><button class="tool" data-tool="pass">➡ Passe</button><button class="tool" data-tool="run">🏃 Course</button>
+<button class="tool" data-tool="dribble">〰 Conduite</button><button class="tool" data-tool="zone">▣ Zone</button><button class="tool" data-tool="text">T Texte</button>
+</div>
+<p class="small">Sélection : glisser un joueur. Passe/course : toucher le joueur de départ puis le joueur d'arrivée. Zone : toucher le terrain.</p>
+<h3>Joueurs</h3>
+<div class="grid2"><button id="addOur">+ Joueur bleu</button><button id="addOpp">+ Joueur rouge</button></div>
+<div class="row" style="margin-top:7px"><button id="ballBtn">⚽ Ballon</button><button id="clearDraw">Effacer tracés</button></div>
+<h3>Poste sélectionné</h3>
+<select id="role"><option value="">Aucun</option><option>GB</option><option>DCG</option><option>DC</option><option>DCD</option><option>MG</option><option>MC</option><option>MD</option><option>BU</option></select>
+<div class="status" id="status">Prêt.</div>
+</aside>
+
+<section class="center">
+<div class="panel pitchWrap"><canvas id="pitch" width="1400" height="900"></canvas></div>
+<div class="panel" style="margin-top:8px">
+<div class="row"><button id="build" class="primary">🎯 Construire l'action</button><button id="finish">✓ Terminer</button><button id="resetAnim">↺ Rejouer</button><button id="next">⏭ Étape</button><button id="play">▶ Jouer</button></div>
+<div class="timeline" id="timeline"></div>
+<div class="sequence" id="sequence">Aucune action. Active « Construire l'action », puis touche les joueurs dans l'ordre.</div>
+</div>
+</section>
+
+<aside class="right panel">
+<div id="tabBoard">
+<h3>Composition</h3><div class="list" id="playerList"></div>
+<hr><h3>Paramètres</h3>
+<div class="stack"><label>Nom de l'action<input id="actionName" placeholder="Sortie de balle côté droit"></label><label>Consigne<textarea id="coachNote" rows="3" placeholder="Principes, déclencheurs, corrections..."></textarea></label></div>
+</div>
+<div id="tabActions" class="hidden">
+<h3>Bibliothèque d'actions</h3>
+<div class="grid2"><button id="saveAction">＋ Enregistrer</button><button id="clearActions">Tout vider</button></div>
+<div class="list" id="actionLibrary"></div>
+</div>
+<div id="tabSession" class="hidden">
+<h3>Séance d'entraînement</h3>
+<div class="stack"><label>Thème<input id="sessionTheme" placeholder="Sortie de balle"></label><label>Objectif<textarea id="sessionObjective" rows="3" placeholder="Ce que les joueurs doivent apprendre..."></textarea></label><label>Durée (min)<input id="sessionDuration" type="number" value="20"></label><button id="addExercise" class="primary">Ajouter exercice</button></div>
+<div class="list" id="exerciseList"></div>
+</div>
+<div id="tabMatch" class="hidden">
+<h3>Plan de match</h3>
+<div class="stack"><label>Adversaire<input id="matchOpponent" placeholder="Nom de l'équipe"></label><label>Nos principes<textarea id="matchPrinciples" rows="5" placeholder="Avec ballon...&#10;Sans ballon...&#10;Transitions..."></textarea></label><label>Déclencheurs<textarea id="matchTriggers" rows="4" placeholder="Quand presser, quand sortir, quand écarter..."></textarea></label></div>
+</div>
+<div id="tabConfig" class="hidden">
+<h3>Personnalisation</h3>
+<div class="stack">
+<label>Nom de notre équipe<input id="ourName" value="US Labruguière"></label>
+<label>Nom adversaire<input id="oppName" value="Adversaire"></label>
+<div class="row"><label>Couleur nous<input id="ourColor" type="color" value="#1687ff"></label><label>Couleur adversaire<input id="oppColor" type="color" value="#ed4b4b"></label></div>
+<label>Orientation du terrain<select id="orientation"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label>
+</div>
+<hr>
+<h3>Joueur sélectionné</h3>
+<div class="stack">
+<label>Nom / prénom<input id="playerName" placeholder="Ex. Adam"></label>
+<label>Numéro<input id="playerNumber" type="number" min="1" max="99" placeholder="10"></label>
+<button id="applyPlayer" class="primary">Appliquer au joueur</button>
+</div>
+<hr>
+<h3>Mes formations</h3>
+<div class="stack">
+<label>Nom de la formation<input id="customFormationName" placeholder="Ex. Sortie 3+2+2"></label>
+<button id="saveFormation">＋ Enregistrer la position actuelle</button>
+<div class="list" id="formationLibrary"></div>
+</div>
+<hr>
+<button id="resetPrefs">Réinitialiser personnalisation</button>
+</div>
+</aside>
+</main>
+
+<script>
+const C=document.getElementById('pitch'),ctx=C.getContext('2d');
+const W=C.width,H=C.height;
+const F={
+labru_1331:[[.08,.5],[.25,.25],[.25,.5],[.25,.75],[.52,.25],[.52,.5],[.52,.75],[.80,.5]],
+opp_1331:[[.92,.5],[.75,.25],[.75,.5],[.75,.75],[.48,.25],[.48,.5],[.48,.75],[.20,.5]],
+opp_1232:[[.92,.5],[.75,.30],[.75,.70],[.52,.22],[.52,.5],[.52,.78],[.25,.35],[.25,.65]],
+opp_1322:[[.92,.5],[.75,.22],[.75,.5],[.75,.78],[.50,.35],[.50,.65],[.25,.35],[.25,.65]]
+};
+const ROLES=['GB','DCG','DC','DCD','MG','MC','MD','BU'];
+let players=[],drawings=[],zones=[],texts=[],selected=null,tool='select',side='home',pending=null,ball=null;
+let actionMode=false,path=[],animStep=0,playing=false,playTimer=null,phase='Construction',library=[],exercises=[];
+let prefs={ourName:'US Labruguière',oppName:'Adversaire',ourColor:'#1687ff',oppColor:'#ed4b4b',orientation:'horizontal'},customFormations=[];
+
+function makeTeam(key,team){
+ const f=F[key]||[]; players=players.filter(p=>p.team!==team);
+ f.forEach((a,i)=>players.push({x:a[0]*W,y:a[1]*H,n:i+1,team,role:team==='home'?ROLES[i]:ROLES[i],name:''}));
+ selected=null;draw();
+}
+function nearest(x,y){let bi=-1,bd=55;players.forEach((p,i)=>{let d=Math.hypot(p.x-x,p.y-y);if(d<bd){bd=d;bi=i}});return bi}
+function pos(e){let r=C.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+function arrow(x1,y1,x2,y2,color,dash=[]){
+ ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=6;ctx.setLineDash(dash);
+ ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.setLineDash([]);
+ let a=Math.atan2(y2-y1,x2-x1),s=22;
+ ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-s*Math.cos(a-.5),y2-s*Math.sin(a-.5));ctx.lineTo(x2-s*Math.cos(a+.5),y2-s*Math.sin(a+.5));ctx.closePath();ctx.fill();ctx.restore()
+}
+function field(){
+ ctx.fillStyle='#2d8345';ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.strokeRect(25,25,W-50,H-50);
+ ctx.beginPath();ctx.moveTo(W/2,25);ctx.lineTo(W/2,H-25);ctx.stroke();
+ ctx.beginPath();ctx.arc(W/2,H/2,105,0,Math.PI*2);ctx.stroke();
+ ctx.strokeRect(25,290,180,320);ctx.strokeRect(W-205,290,180,320);
+ ctx.strokeRect(25,385,75,130);ctx.strokeRect(W-100,385,75,130);
+ ctx.beginPath();ctx.arc(W/2,H/2,7,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
+ ctx.fillStyle='rgba(255,255,255,.95)';ctx.font='800 26px Arial';ctx.fillText(prefs.ourName.toUpperCase(),50,65);
+}
+function draw(){
+ field();
+ zones.forEach(z=>{ctx.fillStyle='rgba(255,225,60,.15)';ctx.fillRect(z.x,z.y,z.w,z.h);ctx.strokeStyle='#ffe13c';ctx.lineWidth=3;ctx.strokeRect(z.x,z.y,z.w,z.h)});
+ drawings.forEach(d=>{if(d.type==='pass')arrow(d.x1,d.y1,d.x2,d.y2,'#fff');else if(d.type==='run')arrow(d.x1,d.y1,d.x2,d.y2,'#ffe13c',[18,12]);else arrow(d.x1,d.y1,d.x2,d.y2,'#23d8ff',[6,9])});
+ players.forEach((p,i)=>{
+   ctx.beginPath();ctx.fillStyle=p.team==='home'?prefs.ourColor:prefs.oppColor;ctx.arc(p.x,p.y,31,0,Math.PI*2);ctx.fill();
+   ctx.strokeStyle=i===selected?'#ffe13c':'#fff';ctx.lineWidth=i===selected?5:3;ctx.stroke();
+   ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='800 20px Arial';ctx.fillText(p.n,p.x,p.y+7);
+   ctx.font='800 16px Arial';ctx.fillText(p.name||p.role||'',p.x,p.y+54);
+ });
+ if(ball){ctx.beginPath();ctx.fillStyle='#fff';ctx.arc(ball.x,ball.y,16,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#111';ctx.font='16px Arial';ctx.fillText('⚽',ball.x,ball.y+6)}
+ texts.forEach(t=>{ctx.fillStyle='#fff';ctx.font='800 26px Arial';ctx.textAlign='left';ctx.fillText(t.s,t.x,t.y)});
+}
+function status(s){document.getElementById('status').textContent=s}
+function renderPlayers(){
+ let el=document.getElementById('playerList');el.innerHTML='';
+ players.forEach((p,i)=>{let d=document.createElement('div');d.className='item';d.innerHTML=`<b>${p.team==='home'?'🔵':'🔴'} ${p.role||'Joueur '+p.n}</b><span class="chip">${p.n}</span>`;d.onclick=()=>{selected=i;document.getElementById('role').value=p.role||'';document.getElementById('playerName').value=p.name||'';document.getElementById('playerNumber').value=p.n||'';draw()};el.appendChild(d)})
+}
+function renderTimeline(){
+ let el=document.getElementById('timeline');el.innerHTML='';
+ path.forEach((i,k)=>{let d=document.createElement('div');d.className='step '+(k===animStep?'current':'');d.textContent=(k+1)+'. '+(players[i]?.role||'J'+(players[i]?.n||''));el.appendChild(d)})
+}
+function renderSequence(){
+ let el=document.getElementById('sequence');
+ el.innerHTML=path.length?path.map((i,k)=>`<span class="chip">${k+1} ${players[i]?.role||'J'+players[i]?.n}</span>`).join(' → '):'Aucune action.';
+ renderTimeline()
+}
+
+function applyPrefs(){
+ document.querySelector('.brand').innerHTML='⚽ <span>'+prefs.ourName+'</span> · CoachBoard U10/U11';
+ document.getElementById('ourName').value=prefs.ourName; document.getElementById('oppName').value=prefs.oppName;
+ document.getElementById('ourColor').value=prefs.ourColor; document.getElementById('oppColor').value=prefs.oppColor;
+ document.getElementById('orientation').value=prefs.orientation;
+ draw();
+}
+function renderFormationLibrary(){
+ const el=document.getElementById('formationLibrary'); el.innerHTML='';
+ customFormations.forEach((f,i)=>{
+   const d=document.createElement('div'); d.className='item';
+   d.innerHTML='<b>'+f.name+'</b><button>Charger</button><button class="danger">×</button>';
+   d.children[1].onclick=()=>{players=f.players.map(x=>({...x,x:x.x*W,y:x.y*H}));selected=null;renderPlayers();draw();status('Formation « '+f.name+' » chargée.')};
+   d.children[2].onclick=()=>{customFormations.splice(i,1);localStorage.setItem('labruCustomFormations',JSON.stringify(customFormations));renderFormationLibrary()};
+   el.appendChild(d);
+ });
+}
+document.getElementById('applyPlayer').onclick=()=>{
+ if(selected===null){status('Sélectionne d’abord un joueur.');return}
+ players[selected].name=document.getElementById('playerName').value.trim();
+ const n=parseInt(document.getElementById('playerNumber').value,10); if(n>0)players[selected].n=n;
+ renderPlayers();draw();status('Joueur personnalisé.');
+};
+document.getElementById('ourName').oninput=e=>{prefs.ourName=e.target.value||'Notre équipe';localStorage.setItem('labruPrefs',JSON.stringify(prefs));draw()};
+document.getElementById('oppName').oninput=e=>{prefs.oppName=e.target.value||'Adversaire';localStorage.setItem('labruPrefs',JSON.stringify(prefs))};
+document.getElementById('ourColor').oninput=e=>{prefs.ourColor=e.target.value;localStorage.setItem('labruPrefs',JSON.stringify(prefs));draw()};
+document.getElementById('oppColor').oninput=e=>{prefs.oppColor=e.target.value;localStorage.setItem('labruPrefs',JSON.stringify(prefs));draw()};
+document.getElementById('orientation').onchange=e=>{prefs.orientation=e.target.value;localStorage.setItem('labruPrefs',JSON.stringify(prefs));status('Orientation enregistrée.')};
+document.getElementById('saveFormation').onclick=()=>{
+ const name=document.getElementById('customFormationName').value.trim()||'Formation personnelle '+(customFormations.length+1);
+ const home=players.filter(p=>p.team==='home').map(p=>({...p,x:p.x/W,y:p.y/H}));
+ customFormations.push({name,players:home});localStorage.setItem('labruCustomFormations',JSON.stringify(customFormations));renderFormationLibrary();status('Formation personnelle enregistrée.');
+};
+document.getElementById('resetPrefs').onclick=()=>{
+ if(confirm('Réinitialiser les réglages personnalisés ?')){
+  prefs={ourName:'US Labruguière',oppName:'Adversaire',ourColor:'#1687ff',oppColor:'#ed4b4b',orientation:'horizontal'};
+  localStorage.setItem('labruPrefs',JSON.stringify(prefs));applyPrefs();
+ }
+};
+function pointerDown(e){
+ let q=pos(e);
+ if(actionMode){
+   let i=nearest(q.x,q.y); if(i>=0){ if(!path.includes(i)||path[path.length-1]!==i){if(path.length===0||path[path.length-1]!==i)path.push(i)} renderSequence(); status('Étape '+path.length+' ajoutée.'); draw(); } return;
+ }
+ if(tool==='select'){let i=nearest(q.x,q.y);if(i>=0){selected=i;drag=i;C.setPointerCapture(e.pointerId);document.getElementById('role').value=players[i].role||'';draw()}}
+ else if(['pass','run','dribble'].includes(tool)){let i=nearest(q.x,q.y);if(i>=0){if(pending===null){pending=i;status('Joueur de départ sélectionné.');}else{let a=players[pending],b=players[i];drawings.push({x1:a.x,y1:a.y,x2:b.x,y2:b.y,type:tool});pending=null;status('Tracé ajouté.')}draw()}}
+ else if(tool==='zone'){zones.push({x:q.x-80,y:q.y-55,w:160,h:110});draw()}
+ else if(tool==='text'){let s=prompt('Texte à placer :');if(s){texts.push({x:q.x,y:q.y,s});draw()}}
+}
+let drag=null;
+C.style.touchAction='none';C.addEventListener('pointerdown',pointerDown);
+C.addEventListener('pointermove',e=>{if(drag!==null){let q=pos(e);players[drag].x=q.x;players[drag].y=q.y;if(ball&&selected===drag){ball.x=q.x+42;ball.y=q.y}draw()}});
+C.addEventListener('pointerup',()=>drag=null);
+
+document.querySelectorAll('.tool').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tool').forEach(x=>x.classList.remove('active'));b.classList.add('active');tool=b.dataset.tool;pending=null;status('Outil : '+b.textContent)});
+document.querySelectorAll('.phase').forEach(b=>b.onclick=()=>{document.querySelectorAll('.phase').forEach(x=>x.classList.remove('active'));b.classList.add('active');phase=b.dataset.phase;status('Phase : '+phase)});
+document.getElementById('ourBtn').onclick=()=>{side='home';document.getElementById('ourBtn').classList.add('active');document.getElementById('oppBtn').classList.remove('active')};
+document.getElementById('oppBtn').onclick=()=>{side='away';document.getElementById('oppBtn').classList.add('active');document.getElementById('ourBtn').classList.remove('active')};
+document.getElementById('ourFormation').onchange=e=>makeTeam(e.target.value,'home');
+document.getElementById('oppFormation').onchange=e=>{let v=e.target.value;if(v==='none'){players=players.filter(p=>p.team!=='away');draw();return}makeTeam(v,'away')};
+document.getElementById('role').onchange=e=>{if(selected!==null){players[selected].role=e.target.value;renderPlayers();draw()}};
+document.getElementById('addOur').onclick=()=>{players.push({x:260,y:450,n:players.filter(p=>p.team==='home').length+1,team:'home',role:''});renderPlayers();draw()};
+document.getElementById('addOpp').onclick=()=>{players.push({x:1140,y:450,n:players.filter(p=>p.team==='away').length+1,team:'away',role:''});renderPlayers();draw()};
+document.getElementById('ballBtn').onclick=()=>{if(selected!==null){ball={x:players[selected].x+42,y:players[selected].y};draw();status('Ballon placé.')}};
+document.getElementById('clearDraw').onclick=()=>{drawings=[];zones=[];texts=[];draw()};
+document.getElementById('resetAnim').ondblclick=()=>{path=[];animStep=0;drawings=[];renderSequence();draw();status('Action réinitialisée.')};
+document.addEventListener('keydown',e=>{if(e.key==='Delete'&&selected!==null){players.splice(selected,1);selected=null;renderPlayers();draw()}});
+
+document.getElementById('build').onclick=()=>{actionMode=true;path=[];animStep=0;drawings=[];playing=false;renderSequence();status('Mode action : touche les joueurs dans l’ordre.')};
+document.getElementById('finish').onclick=()=>{actionMode=false;animStep=0;if(path.length>1){for(let k=1;k<path.length;k++){let a=players[path[k-1]],b=players[path[k]];drawings.push({x1:a.x,y1:a.y,x2:b.x,y2:b.y,type:'pass'})}if(ball){let a=players[path[0]];ball={x:a.x+42,y:a.y}}status('Action terminée. Prête à être jouée.')}else status('Action trop courte.');renderSequence();draw()};
+document.getElementById('resetAnim').onclick=()=>{playing=false;clearInterval(playTimer);animStep=0;if(path.length){let a=players[path[0]];if(ball)ball={x:a.x+42,y:a.y};}renderSequence();draw()};
+function doStep(){if(path.length<2){status('Construis une action d’abord.');return}if(animStep>=path.length-1){playing=false;clearInterval(playTimer);status('Action terminée.');return}let to=players[path[animStep+1]];if(ball){ball.x=to.x;ball.y=to.y}status('Étape '+(animStep+1)+' : '+(players[path[animStep]].role||'Joueur')+' → '+(to.role||'Joueur'));animStep++;renderSequence();draw()}
+document.getElementById('next').onclick=doStep;
+document.getElementById('play').onclick=()=>{if(path.length<2){status('Construis une action d’abord.');return}playing=!playing;document.getElementById('play').textContent=playing?'⏸ Pause':'▶ Jouer';if(playing){playTimer=setInterval(doStep,1100)}else clearInterval(playTimer)};
+document.getElementById('saveAction').onclick=()=>{let name=document.getElementById('actionName').value||'Action sans nom';library.push({name,phase,path:[...path],note:document.getElementById('coachNote').value,formation:document.getElementById('oppFormation').value});localStorage.setItem('labruLibrary',JSON.stringify(library));renderLibrary();status('Action enregistrée.')};
+document.getElementById('clearActions').onclick=()=>{if(confirm('Vider la bibliothèque ?')){library=[];localStorage.removeItem('labruLibrary');renderLibrary()}};
+function renderLibrary(){let el=document.getElementById('actionLibrary');el.innerHTML='';library.forEach((a,i)=>{let d=document.createElement('div');d.className='item';d.innerHTML=`<b>${a.name}<br><span class="small">${a.phase}</span></b><button>▶</button>`;d.querySelector('button').onclick=()=>{path=a.path.filter(i=>players[i]);animStep=0;renderSequence();status('Action chargée.');};el.appendChild(d)})}
+document.getElementById('addExercise').onclick=()=>{let o={theme:document.getElementById('sessionTheme').value||'Exercice',objective:document.getElementById('sessionObjective').value,duration:document.getElementById('sessionDuration').value};exercises.push(o);renderExercises()};
+function renderExercises(){let el=document.getElementById('exerciseList');el.innerHTML='';exercises.forEach((x,i)=>{let d=document.createElement('div');d.className='item';d.innerHTML=`<b>${i+1}. ${x.theme}<br><span class="small">${x.duration} min · ${x.objective||'Objectif à préciser'}</span></b>`;el.appendChild(d)})}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('[data-tab]').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+ ['board','actions','session','match','config'].forEach(x=>{let el=document.getElementById('tab'+x[0].toUpperCase()+x.slice(1));if(el)el.classList.add('hidden')});
+ let target=document.getElementById('tab'+b.dataset.tab[0].toUpperCase()+b.dataset.tab.slice(1));if(target)target.classList.remove('hidden');
+});
+document.getElementById('exportBtn').onclick=()=>{let a=document.createElement('a');a.download='US-Labruguire-'+(document.getElementById('actionName').value||'tactique')+'.png';a.href=C.toDataURL('image/png');a.click()};
+document.getElementById('printBtn').onclick=()=>window.print();
+document.getElementById('newBtn').onclick=()=>{if(confirm('Nouveau tableau ?')){players=[];drawings=[];zones=[];texts=[];path=[];ball=null;selected=null;renderPlayers();renderSequence();draw()}};
+document.getElementById('saveBtn').onclick=()=>{
+ let data={players,drawings,zones,texts,path,ball,phase,prefs,library,customFormations,exercises,
+ actionName:document.getElementById('actionName').value,coachNote:document.getElementById('coachNote').value,
+ matchOpponent:document.getElementById('matchOpponent').value,matchPrinciples:document.getElementById('matchPrinciples').value,
+ matchTriggers:document.getElementById('matchTriggers').value,sessionTheme:document.getElementById('sessionTheme').value,
+ sessionObjective:document.getElementById('sessionObjective').value,sessionDuration:document.getElementById('sessionDuration').value};
+ localStorage.setItem('labruBoard',JSON.stringify(data));localStorage.setItem('labruLibrary',JSON.stringify(library));
+ localStorage.setItem('labruCustomFormations',JSON.stringify(customFormations));localStorage.setItem('labruPrefs',JSON.stringify(prefs));
+ status('Projet complet sauvegardé sur cet iPad.')
+};
+document.getElementById('loadBtn').onclick=()=>{
+ let raw=localStorage.getItem('labruBoard');if(!raw){status('Aucune sauvegarde trouvée.');return}
+ let d=JSON.parse(raw);players=d.players||[];drawings=d.drawings||[];zones=d.zones||[];texts=d.texts||[];path=d.path||[];ball=d.ball||null;
+ phase=d.phase||'Construction';exercises=d.exercises||[];library=d.library||library;customFormations=d.customFormations||customFormations;prefs=d.prefs||prefs;
+ document.getElementById('actionName').value=d.actionName||'';document.getElementById('coachNote').value=d.coachNote||'';
+ document.getElementById('matchOpponent').value=d.matchOpponent||'';document.getElementById('matchPrinciples').value=d.matchPrinciples||'';
+ document.getElementById('matchTriggers').value=d.matchTriggers||'';document.getElementById('sessionTheme').value=d.sessionTheme||'';
+ document.getElementById('sessionObjective').value=d.sessionObjective||'';document.getElementById('sessionDuration').value=d.sessionDuration||20;
+ renderPlayers();renderSequence();renderExercises();renderLibrary();renderFormationLibrary();applyPrefs();draw();status('Projet complet chargé.')
+};
+
+try{library=JSON.parse(localStorage.getItem('labruLibrary')||'[]')}catch(e){library=[]}
+try{prefs=JSON.parse(localStorage.getItem('labruPrefs')||JSON.stringify(prefs))}catch(e){}
+try{customFormations=JSON.parse(localStorage.getItem('labruCustomFormations')||'[]')}catch(e){}
+makeTeam('labru_1331','home');renderPlayers();renderLibrary();renderFormationLibrary();applyPrefs();draw();
+</script>
+</body>
+</html>
