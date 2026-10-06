@@ -31,7 +31,7 @@ hr{border:0;border-top:1px solid var(--line);margin:12px 0}
 .list{max-height:270px;overflow:auto;display:grid;gap:6px}.item{background:#10161e;border:1px solid var(--line);border-radius:9px;padding:8px;display:flex;gap:6px;align-items:center}.item b{flex:1}
 .chip{display:inline-block;padding:4px 7px;border-radius:20px;background:#253044;font-size:11px}
 .sequence{min-height:80px;background:#10161e;border-radius:10px;padding:9px;line-height:1.7}
-.timeline{display:flex;gap:5px;overflow:auto;padding:6px 0}.step{min-width:64px;text-align:center;background:#202b39;border-radius:9px;padding:7px}.step.current{background:#ffe05a;color:#111}
+.timeline{touch-action:none;display:grid;gap:6px;padding:6px 0;max-height:280px;overflow:auto}.step{display:flex;align-items:center;gap:7px;background:#202b39;border-radius:9px;padding:7px}.step.current{background:#ffe05a;color:#111}.step .stepText{flex:1}.step button{padding:5px 8px;min-width:34px}.step.dragging{opacity:.45}.gestureHint{margin-top:6px;padding:8px 10px;border:1px dashed #46566b;border-radius:9px;background:#10161e}
 .hidden{display:none!important}
 @media(max-width:1100px){main{grid-template-columns:240px minmax(450px,1fr)}main>.right{grid-column:1/-1}.right .list{max-height:180px}}
 @media(max-width:760px){header{position:relative}.tabs{position:sticky;top:0;z-index:15}main{display:flex;flex-direction:column;padding:7px}.left,.right{order:2}.center{order:1}.panel{padding:9px}canvas{border-radius:10px}.brand{width:100%}.grid3{grid-template-columns:repeat(2,1fr)}}
@@ -87,9 +87,10 @@ if ("serviceWorker" in navigator) {
 <section class="center">
 <div class="panel pitchWrap"><canvas id="pitch" width="1400" height="900"></canvas></div>
 <div class="panel" style="margin-top:8px">
-<div class="row"><button id="build" class="primary">🎯 Construire l'action</button><button id="finish">✓ Terminer</button><button id="resetAnim">↺ Rejouer</button><button id="next">⏭ Étape</button><button id="play">▶ Jouer</button></div>
+<div class="row"><button id="build" class="primary">🎯 Construire l'action</button><button id="finish">✓ Terminer</button><button id="resetAnim">↺ Rejouer</button><button id="next">⏭ Étape</button><button id="play">▶ Lire l'action</button><button id="pause">⏸ Pause</button><button id="resume">▶ Reprendre</button><button id="editPaused">✏️ Modifier après pause</button><button id="updateScenario" class="primary" disabled>💾 Mettre à jour</button></div>
 <div class="timeline" id="timeline"></div>
-<div class="sequence" id="sequence">Aucune action. Active « Construire l'action », puis touche les joueurs dans l'ordre.</div>
+<div class="sequence" id="sequence">Aucune action.</div>
+<div class="gestureHint">☝️ <b>Déplacement :</b> maintiens le doigt sur un joueur et fais-le glisser. &nbsp; ✍️ <b>Passe/course/conduite :</b> maintiens le doigt sur le joueur puis dessine la trajectoire. &nbsp; ⏸️ <b>Pause :</b> modifie puis mets à jour le scénario.</div>
 </div>
 </section>
 
@@ -102,6 +103,7 @@ if ("serviceWorker" in navigator) {
 <div id="tabActions" class="hidden">
 <h3>Bibliothèque d'actions</h3>
 <div class="grid2"><button id="saveAction">＋ Enregistrer</button><button id="clearActions">Tout vider</button></div>
+<div class="small" style="margin:6px 0">Chaque action peut être chargée, modifiée ou supprimée individuellement.</div>
 <div class="list" id="actionLibrary"></div>
 </div>
 <div id="tabSession" class="hidden">
@@ -152,7 +154,9 @@ opp_1322:[[.92,.5],[.75,.22],[.75,.5],[.75,.78],[.50,.35],[.50,.65],[.25,.35],[.
 };
 const ROLES=['GB','DCG','DC','DCD','MG','MC','MD','BU'];
 let players=[],drawings=[],zones=[],texts=[],selected=null,tool='select',side='home',pending=null,ball=null;
-let actionMode=false,path=[],animStep=0,playing=false,playTimer=null,phase='Construction',library=[],exercises=[];
+let actionMode=false,path=[],actionSteps=[],animStep=0,playing=false,paused=false,playTimer=null,playRaf=null,phase='Construction',library=[],exercises=[],initialPlayers=null;
+let editingPausedMode=false,editInsertIndex=null,pausedSnapshot=null;
+let gesture=null;
 let prefs={ourName:'US Labruguière',oppName:'Adversaire',ourColor:'#1687ff',oppColor:'#ed4b4b',orientation:'horizontal'},customFormations=[];
 
 function makeTeam(key,team){
@@ -181,7 +185,14 @@ function field(){
 function draw(){
  field();
  zones.forEach(z=>{ctx.fillStyle='rgba(255,225,60,.15)';ctx.fillRect(z.x,z.y,z.w,z.h);ctx.strokeStyle='#ffe13c';ctx.lineWidth=3;ctx.strokeRect(z.x,z.y,z.w,z.h)});
- drawings.forEach(d=>{if(d.type==='pass')arrow(d.x1,d.y1,d.x2,d.y2,'#fff');else if(d.type==='run')arrow(d.x1,d.y1,d.x2,d.y2,'#ffe13c',[18,12]);else arrow(d.x1,d.y1,d.x2,d.y2,'#23d8ff',[6,9])});
+ drawings.forEach(d=>{
+   if(d.points&&d.points.length>1){
+     ctx.save();ctx.strokeStyle=d.type==='pass'?'#fff':d.type==='run'?'#ffe13c':'#23d8ff';ctx.lineWidth=6;ctx.setLineDash(d.type==='pass'?[]:d.type==='run'?[18,12]:[6,9]);ctx.beginPath();ctx.moveTo(d.points[0].x,d.points[0].y);d.points.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.stroke();ctx.setLineDash([]);let a=d.points[d.points.length-2],b=d.points[d.points.length-1];let ang=Math.atan2(b.y-a.y,b.x-a.x),sz=22;ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-sz*Math.cos(ang-.5),b.y-sz*Math.sin(ang-.5));ctx.lineTo(b.x-sz*Math.cos(ang+.5),b.y-sz*Math.sin(ang+.5));ctx.closePath();ctx.fill();ctx.restore();
+   } else if(d.type==='pass')arrow(d.x1,d.y1,d.x2,d.y2,'#fff');else if(d.type==='run')arrow(d.x1,d.y1,d.x2,d.y2,'#ffe13c',[18,12]);else arrow(d.x1,d.y1,d.x2,d.y2,'#23d8ff',[6,9]);
+ });
+ if(gesture && gesture.points && gesture.points.length>1 && ['pass','run','dribble'].includes(gesture.kind)){
+   ctx.save();ctx.globalAlpha=.85;ctx.strokeStyle=gesture.kind==='pass'?'#fff':gesture.kind==='run'?'#ffe13c':'#23d8ff';ctx.lineWidth=5;ctx.setLineDash(gesture.kind==='pass'?[]:gesture.kind==='run'?[18,12]:[6,9]);ctx.beginPath();ctx.moveTo(gesture.points[0].x,gesture.points[0].y);gesture.points.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.stroke();ctx.setLineDash([]);ctx.restore();
+ }
  players.forEach((p,i)=>{
    ctx.beginPath();ctx.fillStyle=p.team==='home'?prefs.ourColor:prefs.oppColor;ctx.arc(p.x,p.y,31,0,Math.PI*2);ctx.fill();
    ctx.strokeStyle=i===selected?'#ffe13c':'#fff';ctx.lineWidth=i===selected?5:3;ctx.stroke();
@@ -196,14 +207,58 @@ function renderPlayers(){
  let el=document.getElementById('playerList');el.innerHTML='';
  players.forEach((p,i)=>{let d=document.createElement('div');d.className='item';d.innerHTML=`<b>${p.team==='home'?'🔵':'🔴'} ${p.role||'Joueur '+p.n}</b><span class="chip">${p.n}</span>`;d.onclick=()=>{selected=i;document.getElementById('role').value=p.role||'';document.getElementById('playerName').value=p.name||'';document.getElementById('playerNumber').value=p.n||'';draw()};el.appendChild(d)})
 }
+function stepLabel(st,k){
+ if(st.type==='player') return `👤 ${k+1}. Choix du joueur · ${players[st.player]?.role||'J'+(players[st.player]?.n||'')}`;
+ if(st.type==='pass') return `➡️ ${k+1}. Passe · ${players[st.from]?.role||'J'+(players[st.from]?.n||'')} → ${st.to!=null?(players[st.to]?.role||'J'+(players[st.to]?.n||'')):'zone'}`;
+ if(st.type==='run') return `🏃 ${k+1}. Déplacement · ${players[st.player]?.role||'J'+(players[st.player]?.n||'')}`;
+ if(st.type==='dribble') return `〰️ ${k+1}. Conduite · ${players[st.player]?.role||'J'+(players[st.player]?.n||'')}`;
+ if(st.type==='zone') return `▣ ${k+1}. Zone`;
+ if(st.type==='text') return `T ${k+1}. Texte · ${st.text||''}`;
+ return `${k+1}. Action`;
+}
+let timelineDrag=null;
 function renderTimeline(){
  let el=document.getElementById('timeline');el.innerHTML='';
- path.forEach((i,k)=>{let d=document.createElement('div');d.className='step '+(k===animStep?'current':'');d.textContent=(k+1)+'. '+(players[i]?.role||'J'+(players[i]?.n||''));el.appendChild(d)})
+ actionSteps.forEach((st,k)=>{
+   let d=document.createElement('div'); d.className='step '+(k===animStep?'current':''); d.dataset.index=k;
+   d.innerHTML=`<span class="stepText">☰ ${stepLabel(st,k)}</span><button title="Monter">▲</button><button title="Descendre">▼</button><button class="danger" title="Supprimer">🗑</button>`;
+   d.children[1].onclick=()=>moveActionStep(k,k-1);
+   d.children[2].onclick=()=>moveActionStep(k,k+1);
+   d.children[3].onclick=()=>removeActionStep(k);
+   d.addEventListener('pointerdown',e=>{ if(e.target.tagName==='BUTTON') return; timelineDrag={from:k,pointerId:e.pointerId}; d.classList.add('dragging'); d.setPointerCapture(e.pointerId); });
+   d.addEventListener('pointermove',e=>{ if(!timelineDrag||timelineDrag.pointerId!==e.pointerId)return; const rect=d.getBoundingClientRect(); const mid=rect.top+rect.height/2; timelineDrag.over=e.clientY>mid?k+1:k; });
+   d.addEventListener('pointerup',e=>{ if(!timelineDrag||timelineDrag.pointerId!==e.pointerId)return; const from=timelineDrag.from; let to=timelineDrag.over; d.classList.remove('dragging'); timelineDrag=null; if(to==null||to===from||to===from+1)return; if(to>from)to--; moveActionStep(from,to); });
+   d.addEventListener('pointercancel',()=>{timelineDrag=null;d.classList.remove('dragging')});
+   el.appendChild(d);
+ });
+}
+function syncPathFromSteps(){
+ path=actionSteps.filter(s=>s.type==='player'&&s.player!=null).map(s=>s.player);
 }
 function renderSequence(){
+ syncPathFromSteps();
  let el=document.getElementById('sequence');
- el.innerHTML=path.length?path.map((i,k)=>`<span class="chip">${k+1} ${players[i]?.role||'J'+players[i]?.n}</span>`).join(' → '):'Aucune action.';
- renderTimeline()
+ el.innerHTML=actionSteps.length?actionSteps.map((s,k)=>`<span class="chip">${stepLabel(s,k)}</span>`).join(' → '):'Aucune action.';
+ renderTimeline();
+ updatePlaybackButtons();
+}
+function moveActionStep(from,to){
+ if(to<0||to>=actionSteps.length||from===to)return;
+ const order=actionSteps.map((_,i)=>i); const [x]=order.splice(from,1); order.splice(to,0,x);
+ const oldSteps=[...actionSteps]; actionSteps=order.map(i=>oldSteps[i]);
+ const oldDrawings=drawings.map(d=>({...d}));
+ drawings=oldDrawings.map(d=>{ if(d.actionStep==null)return d; const ni=order.indexOf(d.actionStep); return {...d,actionStep:ni<0?d.actionStep:ni}; });
+ if(editingPausedMode&&editInsertIndex!=null){ if(editInsertIndex===from)editInsertIndex=to; else if(from<editInsertIndex&&to>=editInsertIndex)editInsertIndex--; else if(from>editInsertIndex&&to<=editInsertIndex)editInsertIndex++; }
+ syncPathFromSteps();renderSequence();draw();status('Étape déplacée dans la chronologie.');
+}
+function removeActionStep(i){
+ if(!actionSteps[i])return;
+ if(confirm('Supprimer cette étape de la chronologie ?')){
+   actionSteps.splice(i,1);syncPathFromSteps();
+   drawings=drawings.filter(d=>d.actionStep!==i);
+   drawings.forEach(d=>{if(d.actionStep>i)d.actionStep--;});
+   renderSequence();draw();status('Étape supprimée.');
+ }
 }
 
 function applyPrefs(){
@@ -245,20 +300,71 @@ document.getElementById('resetPrefs').onclick=()=>{
   localStorage.setItem('labruPrefs',JSON.stringify(prefs));applyPrefs();
  }
 };
+function addStep(st){ if(editingPausedMode&&editInsertIndex!=null){ actionSteps.splice(editInsertIndex+1,0,st); editInsertIndex++; } else actionSteps.push(st); syncPathFromSteps(); renderSequence(); }
+function addGestureDrawing(type,points,playerIndex,fromIndex=null,toIndex=null){
+ if(!points||points.length<2)return;
+ const last=points[points.length-1];
+ const d={type,points:points.map(p=>({x:p.x,y:p.y})),actionStep:actionSteps.length};
+ if(fromIndex!=null)d.from=fromIndex;if(toIndex!=null)d.to=toIndex;if(playerIndex!=null)d.player=playerIndex;
+ drawings.push(d); return d;
+}
 function pointerDown(e){
  let q=pos(e);
- if(actionMode){
-   let i=nearest(q.x,q.y); if(i>=0){ if(!path.includes(i)||path[path.length-1]!==i){if(path.length===0||path[path.length-1]!==i)path.push(i)} renderSequence(); status('Étape '+path.length+' ajoutée.'); draw(); } return;
+ if(actionMode && ['pass','run','dribble'].includes(tool)){
+   let i=nearest(q.x,q.y);
+   if(i>=0){gesture={kind:tool,start:{x:q.x,y:q.y},points:[{x:q.x,y:q.y}],player:i,from:i,pointerId:e.pointerId};C.setPointerCapture(e.pointerId);status('Geste en cours : dessine la trajectoire avec le doigt.');draw();}
+   return;
  }
- if(tool==='select'){let i=nearest(q.x,q.y);if(i>=0){selected=i;drag=i;C.setPointerCapture(e.pointerId);document.getElementById('role').value=players[i].role||'';draw()}}
- else if(['pass','run','dribble'].includes(tool)){let i=nearest(q.x,q.y);if(i>=0){if(pending===null){pending=i;status('Joueur de départ sélectionné.');}else{let a=players[pending],b=players[i];drawings.push({x1:a.x,y1:a.y,x2:b.x,y2:b.y,type:tool});pending=null;status('Tracé ajouté.')}draw()}}
- else if(tool==='zone'){zones.push({x:q.x-80,y:q.y-55,w:160,h:110});draw()}
+ if(actionMode && tool==='select'){
+   let i=nearest(q.x,q.y);
+   if(i>=0){selected=i;document.getElementById('role').value=players[i].role||'';gesture={kind:'select',player:i,start:{x:q.x,y:q.y},points:[{x:q.x,y:q.y}],moved:false,pointerId:e.pointerId};C.setPointerCapture(e.pointerId);draw();}
+   return;
+ }
+ if(actionMode){
+   let i=nearest(q.x,q.y);
+   if(i>=0){addStep({type:'player',player:i});status('Joueur ajouté à la chronologie.');draw();} return;
+ }
+ if(tool==='select'){
+   let i=nearest(q.x,q.y);if(i>=0){selected=i;drag=i;C.setPointerCapture(e.pointerId);document.getElementById('role').value=players[i].role||'';draw()}
+ } else if(['pass','run','dribble'].includes(tool)){
+   let i=nearest(q.x,q.y);if(i>=0){if(pending===null){pending=i;status('Joueur de départ sélectionné.')}else{let a=players[pending],b=players[i];drawings.push({x1:a.x,y1:a.y,x2:b.x,y2:b.y,type:tool});pending=null;status('Tracé ajouté.')}draw()}
+ } else if(tool==='zone'){zones.push({x:q.x-80,y:q.y-55,w:160,h:110});draw()}
  else if(tool==='text'){let s=prompt('Texte à placer :');if(s){texts.push({x:q.x,y:q.y,s});draw()}}
 }
 let drag=null;
-C.style.touchAction='none';C.addEventListener('pointerdown',pointerDown);
-C.addEventListener('pointermove',e=>{if(drag!==null){let q=pos(e);players[drag].x=q.x;players[drag].y=q.y;if(ball&&selected===drag){ball.x=q.x+42;ball.y=q.y}draw()}});
-C.addEventListener('pointerup',()=>drag=null);
+C.style.touchAction='none';
+C.addEventListener('pointerdown',pointerDown);
+C.addEventListener('pointermove',e=>{
+ let q=pos(e);
+ if(gesture && gesture.pointerId===e.pointerId){
+   gesture.points.push({x:q.x,y:q.y});
+   if(gesture.kind==='select'){
+     const p=players[gesture.player];p.x=q.x;p.y=q.y;
+     if(Math.hypot(q.x-gesture.start.x,q.y-gesture.start.y)>8)gesture.moved=true;
+     if(ball&&selected===gesture.player){ball.x=q.x+42;ball.y=q.y}
+   } else if(gesture.kind==='pass' || gesture.kind==='run' || gesture.kind==='dribble') draw();
+   draw(); return;
+ }
+ if(drag!==null){players[drag].x=q.x;players[drag].y=q.y;if(ball&&selected===drag){ball.x=q.x+42;ball.y=q.y}draw()}
+});
+function finishPointerGesture(e){
+ if(gesture && gesture.pointerId===e.pointerId){
+   let g=gesture,q=pos(e);g.points.push({x:q.x,y:q.y});
+   if(g.kind==='select'){
+     if(g.moved){addStep({type:'run',player:g.player,points:g.points.map(p=>({x:p.x,y:p.y}))});addGestureDrawing('run',g.points,g.player);status('Déplacement ajouté à la chronologie.')}
+     else {addStep({type:'player',player:g.player});status('Joueur ajouté à la chronologie.')}
+   } else {
+     let end=nearest(q.x,q.y);if(end===g.from)end=null;
+     addStep({type:g.kind,player:g.player,from:g.from,to:end,points:g.points.map(p=>({x:p.x,y:p.y}))});
+     addGestureDrawing(g.kind,g.points,g.player,g.from,end);
+     status((g.kind==='pass'?'Passe':g.kind==='run'?'Déplacement':'Conduite')+' ajoutée à la chronologie.');
+   }
+   gesture=null;renderSequence();draw();return;
+ }
+ drag=null;
+}
+C.addEventListener('pointerup',finishPointerGesture);
+C.addEventListener('pointercancel',finishPointerGesture);
 
 document.querySelectorAll('.tool').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tool').forEach(x=>x.classList.remove('active'));b.classList.add('active');tool=b.dataset.tool;pending=null;status('Outil : '+b.textContent)});
 document.querySelectorAll('.phase').forEach(b=>b.onclick=()=>{document.querySelectorAll('.phase').forEach(x=>x.classList.remove('active'));b.classList.add('active');phase=b.dataset.phase;status('Phase : '+phase)});
@@ -271,18 +377,36 @@ document.getElementById('addOur').onclick=()=>{players.push({x:260,y:450,n:playe
 document.getElementById('addOpp').onclick=()=>{players.push({x:1140,y:450,n:players.filter(p=>p.team==='away').length+1,team:'away',role:''});renderPlayers();draw()};
 document.getElementById('ballBtn').onclick=()=>{if(selected!==null){ball={x:players[selected].x+42,y:players[selected].y};draw();status('Ballon placé.')}};
 document.getElementById('clearDraw').onclick=()=>{drawings=[];zones=[];texts=[];draw()};
-document.getElementById('resetAnim').ondblclick=()=>{path=[];animStep=0;drawings=[];renderSequence();draw();status('Action réinitialisée.')};
+document.getElementById('resetAnim').ondblclick=()=>{path=[];actionSteps=[];animStep=0;drawings=[];renderSequence();draw();status('Action réinitialisée.')};
 document.addEventListener('keydown',e=>{if(e.key==='Delete'&&selected!==null){players.splice(selected,1);selected=null;renderPlayers();draw()}});
 
-document.getElementById('build').onclick=()=>{actionMode=true;path=[];animStep=0;drawings=[];playing=false;renderSequence();status('Mode action : touche les joueurs dans l’ordre.')};
-document.getElementById('finish').onclick=()=>{actionMode=false;animStep=0;if(path.length>1){for(let k=1;k<path.length;k++){let a=players[path[k-1]],b=players[path[k]];drawings.push({x1:a.x,y1:a.y,x2:b.x,y2:b.y,type:'pass'})}if(ball){let a=players[path[0]];ball={x:a.x+42,y:a.y}}status('Action terminée. Prête à être jouée.')}else status('Action trop courte.');renderSequence();draw()};
-document.getElementById('resetAnim').onclick=()=>{playing=false;clearInterval(playTimer);animStep=0;if(path.length){let a=players[path[0]];if(ball)ball={x:a.x+42,y:a.y};}renderSequence();draw()};
-function doStep(){if(path.length<2){status('Construis une action d’abord.');return}if(animStep>=path.length-1){playing=false;clearInterval(playTimer);status('Action terminée.');return}let to=players[path[animStep+1]];if(ball){ball.x=to.x;ball.y=to.y}status('Étape '+(animStep+1)+' : '+(players[path[animStep]].role||'Joueur')+' → '+(to.role||'Joueur'));animStep++;renderSequence();draw()}
+document.getElementById('build').onclick=()=>{actionMode=true;editingPausedMode=false;editInsertIndex=null;pausedSnapshot=null;path=[];actionSteps=[];animStep=0;drawings=[];playing=false;paused=false;playbackIndex=0;editingActionIndex=null;clearInterval(playTimer);if(playRaf)cancelAnimationFrame(playRaf);initialPlayers=JSON.parse(JSON.stringify(players));renderSequence();status('Mode action : touche un joueur, ou maintiens le doigt pour déplacer/dessiner une trajectoire.')};
+document.getElementById('finish').onclick=()=>{actionMode=false;animStep=0;syncPathFromSteps(); if(editingPausedMode){ editingPausedMode=false; editInsertIndex=null; document.getElementById('updateScenario').disabled=false; document.getElementById('updateScenario').dataset.ready='1'; status('Modification terminée. Appuie sur « Mettre à jour » pour remplacer le scénario sauvegardé.'); } else { status(actionSteps.length?'Action globale terminée. Tu peux maintenant l’enregistrer et la lire dans l’ordre.':'Action vide.'); } renderSequence();draw()};
+function restoreInitialState(){if(initialPlayers){players=JSON.parse(JSON.stringify(initialPlayers));selected=null;renderPlayers();}animStep=0;if(ball&&path.length){let a=players[path[0]];ball={x:a.x+42,y:a.y}}renderSequence();draw()}
+document.getElementById('resetAnim').onclick=()=>{playing=false;paused=false;editingPausedMode=false;editInsertIndex=null;pausedSnapshot=null;document.getElementById('updateScenario').dataset.ready='0';updatePlaybackButtons();clearInterval(playTimer);if(playRaf)cancelAnimationFrame(playRaf);playRaf=null;document.getElementById('play').textContent='▶ Lire l\'action';document.getElementById('pause').textContent='⏸ Pause';restoreInitialState();status('Lecture réinitialisée au début de l’action.')};
+function finishPlayback(){playing=false;paused=false;updatePlaybackButtons();clearInterval(playTimer);if(playRaf)cancelAnimationFrame(playRaf);playRaf=null;document.getElementById('play').textContent='▶ Lire l\'action';document.getElementById('pause').textContent='⏸ Pause';status('Lecture de l’action terminée.');renderSequence();draw()}
+function animateAlong(points,onFrame,onDone){if(!points||points.length<2){onDone&&onDone();return}let start=performance.now(),duration=Math.max(450,Math.min(1400,points.length*28));function frame(now){let t=Math.min(1,(now-start)/duration),idx=t*(points.length-1),i=Math.floor(idx),f=idx-i,a=points[i],b=points[Math.min(i+1,points.length-1)],q={x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f};onFrame(q,t);draw();if(t<1&&playing){playRaf=requestAnimationFrame(frame)}else if(t>=1){playRaf=null;onDone&&onDone()}}playRaf=requestAnimationFrame(frame)}
+function executeStep(i,after){if(i>=actionSteps.length){after&&after();return}let st=actionSteps[i];animStep=i;renderSequence();
+ if(st.type==='player'){selected=st.player??null;status('Étape '+(i+1)+' : '+stepLabel(st,i));draw();setTimeout(after,500);return}
+ if(st.type==='pass'){let pts=st.points||[];status('Étape '+(i+1)+' : passe');if(ball&&pts.length>1){animateAlong(pts,(q,t)=>{ball.x=q.x;ball.y=q.y;if(t===1&&st.to!=null&&players[st.to]){ball.x=players[st.to].x;ball.y=players[st.to].y}},()=>setTimeout(after,80));}else setTimeout(after,500);return}
+ if(st.type==='run'||st.type==='dribble'){let pts=st.points||[],pi=st.player;if(pi==null||!players[pi]){setTimeout(after,300);return}status('Étape '+(i+1)+' : '+(st.type==='run'?'déplacement':'conduite'));animateAlong(pts,(q,t)=>{players[pi].x=q.x;players[pi].y=q.y;if(st.type==='dribble'&&ball){ball.x=q.x+42;ball.y=q.y}},()=>{if(st.to!=null&&players[st.to]){players[pi].x=players[st.to].x;players[pi].y=players[st.to].y}setTimeout(after,80)});return}
+ status('Étape '+(i+1)+' : '+stepLabel(st,i));draw();setTimeout(after,500)}
+function doStep(){if(!actionSteps.length){status('Construis une action d’abord.');return}if(animStep>=actionSteps.length){finishPlayback();return}executeStep(animStep,()=>{animStep++;renderSequence();draw()})}
 document.getElementById('next').onclick=doStep;
-document.getElementById('play').onclick=()=>{if(path.length<2){status('Construis une action d’abord.');return}playing=!playing;document.getElementById('play').textContent=playing?'⏸ Pause':'▶ Jouer';if(playing){playTimer=setInterval(doStep,1100)}else clearInterval(playTimer)};
-document.getElementById('saveAction').onclick=()=>{let name=document.getElementById('actionName').value||'Action sans nom';library.push({name,phase,path:[...path],note:document.getElementById('coachNote').value,formation:document.getElementById('oppFormation').value});localStorage.setItem('labruLibrary',JSON.stringify(library));renderLibrary();status('Action enregistrée.')};
-document.getElementById('clearActions').onclick=()=>{if(confirm('Vider la bibliothèque ?')){library=[];localStorage.removeItem('labruLibrary');renderLibrary()}};
-function renderLibrary(){let el=document.getElementById('actionLibrary');el.innerHTML='';library.forEach((a,i)=>{let d=document.createElement('div');d.className='item';d.innerHTML=`<b>${a.name}<br><span class="small">${a.phase}</span></b><button>▶</button>`;d.querySelector('button').onclick=()=>{path=a.path.filter(i=>players[i]);animStep=0;renderSequence();status('Action chargée.');};el.appendChild(d)})}
+function updatePlaybackButtons(){const has=actionSteps.length>0;document.getElementById('play').disabled=!has;document.getElementById('pause').disabled=!playing;document.getElementById('resume').disabled=!paused;document.getElementById('editPaused').disabled=!paused; document.getElementById('updateScenario').disabled=!(editingPausedMode===false && editingActionIndex!==null && document.getElementById('updateScenario').dataset.ready==='1');}
+let playbackIndex=0;
+function startPlayback(fromCurrent=false){if(!actionSteps.length){status('Construis une action d’abord.');return}if(!fromCurrent){restoreInitialState();playbackIndex=0;animStep=0;} playing=true;paused=false;updatePlaybackButtons();document.getElementById('play').textContent='⏩ Lecture';document.getElementById('pause').textContent='⏸ Pause';function nextStep(){if(!playing)return;if(playbackIndex>=actionSteps.length){finishPlayback();return}const i=playbackIndex;animStep=i;executeStep(i,()=>{if(!playing)return;playbackIndex=i+1;animStep=playbackIndex;renderSequence();nextStep()})}nextStep()}
+document.getElementById('play').onclick=()=>{if(playing){return}startPlayback(false)};
+document.getElementById('pause').onclick=()=>{if(!playing){status('La lecture est déjà en pause.');return}playing=false;paused=true;pausedSnapshot={players:JSON.parse(JSON.stringify(players)),ball:ball?{...ball}:null,playbackIndex,animStep};updatePlaybackButtons();if(playRaf)cancelAnimationFrame(playRaf);playRaf=null;document.getElementById('pause').textContent='⏸ En pause';status('Lecture en pause à l’étape '+Math.min(animStep+1,actionSteps.length)+'. Tu peux reprendre ou modifier le scénario.');renderSequence();draw()};
+document.getElementById('resume').onclick=()=>{if(!paused){status('Aucune lecture en pause.');return}startPlayback(true)};
+document.getElementById('editPaused').onclick=()=>{if(!paused){status('Mets d’abord l’action en pause.');return}playing=false;paused=false;if(playRaf)cancelAnimationFrame(playRaf);playRaf=null;actionMode=true;editingPausedMode=true;editInsertIndex=Math.max(-1,(pausedSnapshot?.playbackIndex??playbackIndex)-1);document.getElementById('updateScenario').dataset.ready='0';updatePlaybackButtons();status('Mode modification après pause : ajoute, déplace ou supprime des étapes. Les nouvelles actions seront insérées à l’endroit de la pause. Appuie sur « Terminer », puis « Mettre à jour ».');renderSequence();draw()};
+let editingActionIndex=null;
+function persistLibrary(){localStorage.setItem('labruLibrary',JSON.stringify(library));renderLibrary()}
+function loadLibraryAction(i,edit=false){const a=library[i];if(!a)return;actionSteps=JSON.parse(JSON.stringify(a.actionSteps||((a.path||[]).map(j=>({type:'player',player:j})))));drawings=JSON.parse(JSON.stringify(a.drawings||[]));initialPlayers=JSON.parse(JSON.stringify(a.initialPlayers||players));if(a.initialPlayers)players=JSON.parse(JSON.stringify(a.initialPlayers));syncPathFromSteps();animStep=0;document.getElementById('actionName').value=a.name||'';document.getElementById('coachNote').value=a.note||'';const phaseBtn=document.querySelector(`.phase[data-phase="${a.phase||'Construction'}"]`);if(phaseBtn){document.querySelectorAll('.phase').forEach(x=>x.classList.remove('active'));phaseBtn.classList.add('active');phase=a.phase||'Construction'};editingActionIndex=i;editingPausedMode=false;editInsertIndex=null;document.getElementById('updateScenario').dataset.ready='0';status(edit?'Action globale chargée pour modification.':'Action globale chargée avec toute sa chronologie.');renderPlayers();renderSequence();draw()}
+document.getElementById('saveAction').onclick=()=>{if(!actionSteps.length){status('Aucune action à enregistrer. Construis d’abord la chronologie.');return}let name=document.getElementById('actionName').value.trim()||'Action sans nom';let item={name,phase,path:[...path],actionSteps:JSON.parse(JSON.stringify(actionSteps)),drawings:JSON.parse(JSON.stringify(drawings)),initialPlayers:JSON.parse(JSON.stringify(initialPlayers||players)),note:document.getElementById('coachNote').value,formation:document.getElementById('oppFormation').value,version:6};if(editingActionIndex!==null&&library[editingActionIndex]){library[editingActionIndex]=item;editingActionIndex=null;persistLibrary();status('Action globale modifiée et enregistrée avec toute sa chronologie.')}else{library.push(item);persistLibrary();status('Action globale enregistrée avec '+actionSteps.length+' étapes.')}};
+document.getElementById('updateScenario').onclick=()=>{ if(editingActionIndex===null||!library[editingActionIndex]){status('Charge d’abord une action de la bibliothèque pour la mettre à jour.');return} const name=document.getElementById('actionName').value.trim()||library[editingActionIndex].name||'Action sans nom'; library[editingActionIndex]={...library[editingActionIndex],name,phase,path:[...path],actionSteps:JSON.parse(JSON.stringify(actionSteps)),drawings:JSON.parse(JSON.stringify(drawings)),initialPlayers:JSON.parse(JSON.stringify(initialPlayers||players)),note:document.getElementById('coachNote').value,formation:document.getElementById('oppFormation').value,version:6}; persistLibrary(); document.getElementById('updateScenario').dataset.ready='0'; status('✅ Scénario mis à jour. Il peut maintenant être relu avec la nouvelle chronologie.'); };
+document.getElementById('clearActions').onclick=()=>{if(confirm('Vider toute la bibliothèque ?')){library=[];editingActionIndex=null;localStorage.removeItem('labruLibrary');renderLibrary();status('Bibliothèque vidée.')}};
+function renderLibrary(){let el=document.getElementById('actionLibrary');el.innerHTML='';library.forEach((a,i)=>{let d=document.createElement('div');d.className='item';d.innerHTML=`<b>${a.name}<br><span class="small">${a.phase||'Construction'}</span></b><button title="Charger">▶</button><button title="Modifier">✏️</button><button class="danger" title="Supprimer">🗑</button>`;d.children[1].onclick=()=>loadLibraryAction(i,false);d.children[2].onclick=()=>loadLibraryAction(i,true);d.children[3].onclick=()=>{if(confirm('Supprimer « '+a.name+' » ?')){library.splice(i,1);if(editingActionIndex===i)editingActionIndex=null;else if(editingActionIndex!==null&&editingActionIndex>i)editingActionIndex--;persistLibrary();status('Action supprimée.')}};el.appendChild(d)})}
 document.getElementById('addExercise').onclick=()=>{let o={theme:document.getElementById('sessionTheme').value||'Exercice',objective:document.getElementById('sessionObjective').value,duration:document.getElementById('sessionDuration').value};exercises.push(o);renderExercises()};
 function renderExercises(){let el=document.getElementById('exerciseList');el.innerHTML='';exercises.forEach((x,i)=>{let d=document.createElement('div');d.className='item';d.innerHTML=`<b>${i+1}. ${x.theme}<br><span class="small">${x.duration} min · ${x.objective||'Objectif à préciser'}</span></b>`;el.appendChild(d)})}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
@@ -294,7 +418,7 @@ document.getElementById('exportBtn').onclick=()=>{let a=document.createElement('
 document.getElementById('printBtn').onclick=()=>window.print();
 document.getElementById('newBtn').onclick=()=>{if(confirm('Nouveau tableau ?')){players=[];drawings=[];zones=[];texts=[];path=[];ball=null;selected=null;renderPlayers();renderSequence();draw()}};
 document.getElementById('saveBtn').onclick=()=>{
- let data={players,drawings,zones,texts,path,ball,phase,prefs,library,customFormations,exercises,
+ let data={players,drawings,zones,texts,path,actionSteps,initialPlayers,ball,phase,prefs,library,customFormations,exercises,
  actionName:document.getElementById('actionName').value,coachNote:document.getElementById('coachNote').value,
  matchOpponent:document.getElementById('matchOpponent').value,matchPrinciples:document.getElementById('matchPrinciples').value,
  matchTriggers:document.getElementById('matchTriggers').value,sessionTheme:document.getElementById('sessionTheme').value,
@@ -306,7 +430,7 @@ document.getElementById('saveBtn').onclick=()=>{
 document.getElementById('loadBtn').onclick=()=>{
  let raw=localStorage.getItem('labruBoard');if(!raw){status('Aucune sauvegarde trouvée.');return}
  let d=JSON.parse(raw);players=d.players||[];drawings=d.drawings||[];zones=d.zones||[];texts=d.texts||[];path=d.path||[];ball=d.ball||null;
- phase=d.phase||'Construction';exercises=d.exercises||[];library=d.library||library;customFormations=d.customFormations||customFormations;prefs=d.prefs||prefs;
+ phase=d.phase||'Construction';exercises=d.exercises||[];library=d.library||library;customFormations=d.customFormations||customFormations;prefs=d.prefs||prefs;initialPlayers=d.initialPlayers||null;actionSteps=d.actionSteps||((d.path||[]).map(i=>({type:'player',player:i})));syncPathFromSteps();
  document.getElementById('actionName').value=d.actionName||'';document.getElementById('coachNote').value=d.coachNote||'';
  document.getElementById('matchOpponent').value=d.matchOpponent||'';document.getElementById('matchPrinciples').value=d.matchPrinciples||'';
  document.getElementById('matchTriggers').value=d.matchTriggers||'';document.getElementById('sessionTheme').value=d.sessionTheme||'';
@@ -315,9 +439,12 @@ document.getElementById('loadBtn').onclick=()=>{
 };
 
 try{library=JSON.parse(localStorage.getItem('labruLibrary')||'[]')}catch(e){library=[]}
+document.getElementById('pause').disabled=true;document.getElementById('resume').disabled=true;document.getElementById('editPaused').disabled=true;
 try{prefs=JSON.parse(localStorage.getItem('labruPrefs')||JSON.stringify(prefs))}catch(e){}
 try{customFormations=JSON.parse(localStorage.getItem('labruCustomFormations')||'[]')}catch(e){}
 makeTeam('labru_1331','home');renderPlayers();renderLibrary();renderFormationLibrary();applyPrefs();draw();
 </script>
+
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}</script>
 </body>
 </html>
